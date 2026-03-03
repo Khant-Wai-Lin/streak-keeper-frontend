@@ -1,50 +1,50 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { createUserWithEmailAndPassword } from "firebase/auth";
 import { useState } from "react";
-import {
-  Alert,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Alert } from "react-native";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth } from "../../src/config/firebase";
 import { theme } from "../../src/core/theme";
 
-export default function LoginScreen() {
+export default function SignUpScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
-  const getLoginErrorMessage = (code) => {
+  const getSignUpErrorMessage = (code) => {
     switch (code) {
+      case "auth/email-already-in-use":
+        return "This email is already in use.";
       case "auth/invalid-email":
         return "Please enter a valid email address.";
-      case "auth/user-not-found":
-      case "auth/wrong-password":
-        return "Incorrect email or password.";
-      case "auth/too-many-requests":
-        return "Too many attempts. Try again later.";
+      case "auth/weak-password":
+        return "Password should be at least 6 characters.";
       case "auth/network-request-failed":
         return "Network error. Check your connection.";
       default:
-        return "Login failed. Please try again.";
+        return "Sign up failed. Please try again.";
     }
   };
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert("Missing info", "Please enter email and password.");
+  const handleSignUp = async () => {
+    if (!email || !password || !confirmPassword) {
+      Alert.alert("Missing info", "Please fill in all fields.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert("Password mismatch", "Passwords do not match.");
       return;
     }
 
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      await createUserWithEmailAndPassword(auth, email.trim(), password);
       router.push("/(tabs)/home");
     } catch (error) {
-      Alert.alert("Login failed", getLoginErrorMessage(error?.code));
+      console.log("SignUp error:", error?.code, error?.message);
+      Alert.alert("Sign up failed", getSignUpErrorMessage(error?.code));
     }
   };
 
@@ -55,7 +55,7 @@ export default function LoginScreen() {
           <View style={styles.logoWrap}>
             <Ionicons name="shield-checkmark" size={40} color={theme.colors.primary} />
           </View>
-          <Text style={styles.brandText}>StreakKeeper</Text>
+          <Text style={styles.brandText}>Create Account</Text>
         </View>
 
         <View style={styles.form}>
@@ -76,23 +76,28 @@ export default function LoginScreen() {
             value={password}
             onChangeText={setPassword}
           />
-          <TouchableOpacity style={styles.linkButton} activeOpacity={0.7}>
-            <Text style={styles.linkText}>Forgot Password?</Text>
-          </TouchableOpacity>
+          <TextInput
+            placeholder="Confirm Password"
+            placeholderTextColor={theme.colors.mutedText}
+            secureTextEntry
+            style={styles.input}
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+          />
         </View>
 
         <TouchableOpacity
           style={styles.primaryButton}
           activeOpacity={0.85}
-          onPress={handleLogin}
+          onPress={handleSignUp}
         >
-          <Text style={styles.primaryButtonText}>Log In</Text>
+          <Text style={styles.primaryButtonText}>Sign Up</Text>
         </TouchableOpacity>
 
         <View style={styles.signUpRow}>
-          <Text style={styles.mutedText}>Don’t have an account?</Text>
-          <TouchableOpacity activeOpacity={0.7} onPress={() => router.push("/(auth)/signup") }>
-            <Text style={styles.signUpText}>Sign Up</Text>
+          <Text style={styles.mutedText}>Already have an account?</Text>
+          <TouchableOpacity activeOpacity={0.7} onPress={() => router.back()}>
+            <Text style={styles.signUpText}>Log In</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -127,7 +132,7 @@ const styles = StyleSheet.create({
   },
   brandText: {
     color: theme.colors.text,
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: "600",
     letterSpacing: 0.3,
   },
@@ -144,13 +149,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     paddingHorizontal: 18,
     paddingVertical: 16,
-  },
-  linkButton: {
-    alignItems: "flex-end",
-  },
-  linkText: {
-    color: theme.colors.mutedText,
-    fontSize: 14,
   },
   primaryButton: {
     alignItems: "center",
