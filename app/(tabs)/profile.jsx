@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Lock, Trophy, User } from "lucide-react-native";
 import { useState } from "react";
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -37,7 +37,7 @@ export default function ProfileScreen() {
 
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={28} color={theme.colors.primary} />
+            <User size={28} color={theme.colors.primary} />
           </View>
           <View style={styles.profileInfo}>
             {isEditing ? (
@@ -89,11 +89,11 @@ export default function ProfileScreen() {
                     !unlocked && styles.badgeIconLocked,
                   ]}
                 >
-                  <Ionicons
-                    name={unlocked ? "trophy" : "lock-closed"}
-                    size={18}
-                    color={unlocked ? tierColor : theme.colors.mutedText}
-                  />
+                  {unlocked ? (
+                    <Trophy size={18} color={tierColor} />
+                  ) : (
+                    <Lock size={18} color={theme.colors.mutedText} />
+                  )}
                 </View>
                 <Text
                   style={[

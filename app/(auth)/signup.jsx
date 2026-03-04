@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { ShieldCheck } from "lucide-react-native";
 import { router } from "expo-router";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { useState } from "react";
@@ -53,7 +53,7 @@ export default function SignUpScreen() {
       <View style={styles.content}>
         <View style={styles.brand}>
           <View style={styles.logoWrap}>
-            <Ionicons name="shield-checkmark" size={40} color={theme.colors.primary} />
+            <ShieldCheck size={40} color={theme.colors.primary} />
           </View>
           <Text style={styles.brandText}>Create Account</Text>
         </View>

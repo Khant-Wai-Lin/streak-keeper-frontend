@@ -42,7 +42,10 @@ app.get("/api/v1/health", (req, res) => {
 app.post("/api/v1/auth/login", (req, res) => {
   return res.status(400).json({
     error: "Use client Firebase Auth",
-    message: "Sign in on the mobile app with Firebase Auth SDK and send the ID token as a Bearer token.",
+    message: [
+      "Sign in on the mobile app with Firebase Auth SDK",
+      "and send the ID token as a Bearer token.",
+    ].join(" "),
   });
 });
 
@@ -59,7 +62,9 @@ app.post("/api/v1/auth/logout", authMiddleware, async (req, res) => {
 app.post("/api/v1/streaks", authMiddleware, async (req, res) => {
   const {goalTitle, frequency} = req.body || {};
   if (!goalTitle || !frequency) {
-    return res.status(400).json({error: "goalTitle and frequency are required"});
+    return res.status(400).json({
+      error: "goalTitle and frequency are required",
+    });
   }
 
   const startDate = new Date().toISOString();
@@ -97,46 +102,51 @@ app.post("/api/v1/streaks/checkin", authMiddleware, async (req, res) => {
 
   const streakRef = admin.firestore().collection("streaks").doc(streakId);
   try {
-    const result = await admin.firestore().runTransaction(async (transaction) => {
-      const streakSnap = await transaction.get(streakRef);
-      if (!streakSnap.exists) {
-        throw new Error("streak_not_found");
-      }
+    const result = await admin.firestore().runTransaction(
+        async (transaction) => {
+          const streakSnap = await transaction.get(streakRef);
+          if (!streakSnap.exists) {
+            throw new Error("streak_not_found");
+          }
 
-      const streak = streakSnap.data();
-      if (streak.userId !== req.user.uid) {
-        throw new Error("forbidden");
-      }
+          const streak = streakSnap.data();
+          if (streak.userId !== req.user.uid) {
+            throw new Error("forbidden");
+          }
 
-      const dateKey = getDateKey(targetDate);
-      const checkinRef = streakRef.collection("checkins").doc(dateKey);
-      const checkinSnap = await transaction.get(checkinRef);
+          const dateKey = getDateKey(targetDate);
+          const checkinRef = streakRef.collection("checkins").doc(dateKey);
+          const checkinSnap = await transaction.get(checkinRef);
 
-      if (checkinSnap.exists) {
-        return {
-          currentStreak: streak.currentStreak || 0,
-          longestStreak: streak.longestStreak || 0,
-        };
-      }
+          if (checkinSnap.exists) {
+            return {
+              currentStreak: streak.currentStreak || 0,
+              longestStreak: streak.longestStreak || 0,
+            };
+          }
 
-      const currentStreak = (streak.currentStreak || 0) + 1;
-      const longestStreak = Math.max(streak.longestStreak || 0, currentStreak);
-      const totalDays = (streak.totalDays || 0) + 1;
+          const currentStreak = (streak.currentStreak || 0) + 1;
+          const longestStreak = Math.max(
+              streak.longestStreak || 0,
+              currentStreak,
+          );
+          const totalDays = (streak.totalDays || 0) + 1;
 
-      transaction.set(checkinRef, {
-        date: dateKey,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+          transaction.set(checkinRef, {
+            date: dateKey,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
 
-      transaction.update(streakRef, {
-        currentStreak,
-        longestStreak,
-        totalDays,
-        lastCheckin: dateKey,
-      });
+          transaction.update(streakRef, {
+            currentStreak,
+            longestStreak,
+            totalDays,
+            lastCheckin: dateKey,
+          });
 
-      return {currentStreak, longestStreak};
-    });
+          return {currentStreak, longestStreak};
+        },
+    );
 
     return res.json(result);
   } catch (error) {
@@ -155,10 +165,10 @@ app.post("/api/v1/streaks/checkin", authMiddleware, async (req, res) => {
 app.get("/api/v1/streaks/history", authMiddleware, async (req, res) => {
   try {
     const snapshot = await admin
-      .firestore()
-      .collection("streaks")
-      .where("userId", "==", req.user.uid)
-      .get();
+        .firestore()
+        .collection("streaks")
+        .where("userId", "==", req.user.uid)
+        .get();
 
     const history = snapshot.docs.map((doc) => {
       const data = doc.data();

@@ -1,6 +1,6 @@
-import { Ionicons } from "@expo/vector-icons";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Settings, Zap } from "lucide-react-native";
 import { theme } from "../../src/core/theme";
 
 export default function HistoryReviewScreen() {
@@ -33,7 +33,7 @@ export default function HistoryReviewScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>History</Text>
-          <Ionicons name="settings-outline" size={20} color={theme.colors.mutedText} />
+          <Settings size={20} color={theme.colors.mutedText} />
         </View>
 
         <View style={styles.summaryBlock}>
@@ -44,7 +44,7 @@ export default function HistoryReviewScreen() {
 
         <View style={styles.card}>
           <View style={styles.cardIcon}>
-            <Ionicons name="flash" size={20} color={theme.colors.primary} />
+            <Zap size={20} color={theme.colors.primary} />
           </View>
           <View style={styles.cardBody}>
             <Text style={styles.cardLabel}>LONGEST STREAK</Text>

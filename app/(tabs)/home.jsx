@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { ArrowRight, Calendar, Check, Flag, Play, Settings } from "lucide-react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
@@ -113,7 +113,7 @@ export default function HomeScreen() {
         <View style={styles.headerRow}>
           <Text style={styles.headerDate}>{todayLabel}</Text>
           <TouchableOpacity style={styles.settingsRow} activeOpacity={0.7}>
-            <Ionicons name="settings-outline" size={18} color={theme.colors.mutedText} />
+            <Settings size={18} color={theme.colors.mutedText} />
           </TouchableOpacity>
         </View>
 
@@ -132,11 +132,7 @@ export default function HomeScreen() {
                 activeOpacity={0.7}
                 onPress={() => openPicker("start")}
               >
-                <Ionicons
-                  name="calendar-outline"
-                  size={20}
-                  color={theme.colors.mutedText}
-                />
+                <Calendar size={20} color={theme.colors.mutedText} />
               </TouchableOpacity>
             </View>
 
@@ -148,16 +144,16 @@ export default function HomeScreen() {
                   activeOpacity={0.8}
                   onPress={() => openPicker("start")}
                 >
-                  <Ionicons name="play" size={14} color={theme.colors.mutedText} />
+                  <Play size={14} color={theme.colors.mutedText} />
                   <Text style={styles.dateChipText}>{formatDate(startDate)}</Text>
                 </TouchableOpacity>
-                <Ionicons name="arrow-forward" size={16} color={theme.colors.mutedText} />
+                <ArrowRight size={16} color={theme.colors.mutedText} />
                 <TouchableOpacity
                   style={styles.dateChip}
                   activeOpacity={0.8}
                   onPress={() => openPicker("end")}
                 >
-                  <Ionicons name="flag" size={14} color={theme.colors.mutedText} />
+                  <Flag size={14} color={theme.colors.mutedText} />
                   <Text style={styles.dateChipText}>{formatDate(endDate)}</Text>
                 </TouchableOpacity>
               </View>
@@ -189,7 +185,7 @@ export default function HomeScreen() {
             ) : (
               <View style={styles.completedCircle}>
                 <View style={styles.checkBadge}>
-                  <Ionicons name="checkmark" size={28} color={theme.colors.primary} />
+                  <Check size={28} color={theme.colors.primary} />
                 </View>
                 <Text style={styles.completedText}>Completed!</Text>
               </View>
