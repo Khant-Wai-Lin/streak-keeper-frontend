@@ -17,6 +17,147 @@ const getDateKey = (date) => {
   return date.toISOString().slice(0, 10);
 };
 
+const MS_IN_DAY = 24 * 60 * 60 * 1000;
+
+const toDateKeyOrNull = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return getDateKey(parsed);
+};
+
+const dateKeyToUtcDate = (dateKey) => {
+  return new Date(`${dateKey}T00:00:00.000Z`);
+};
+
+const addDaysToDateKey = (dateKey, days) => {
+  const next = dateKeyToUtcDate(dateKey);
+  next.setUTCDate(next.getUTCDate() + days);
+  return getDateKey(next);
+};
+
+const daysBetweenInclusive = (startKey, endKey) => {
+  const start = dateKeyToUtcDate(startKey);
+  const end = dateKeyToUtcDate(endKey);
+  if (end < start) {
+    return 0;
+  }
+
+  return Math.floor((end.getTime() - start.getTime()) / MS_IN_DAY) + 1;
+};
+
+const isDateKeyInRange = (dateKey, startKey, endKey) => {
+  return dateKey >= startKey && dateKey <= endKey;
+};
+
+const computeLongestStreak = (checkinKeys, startKey, endKey) => {
+  if (!startKey || !endKey || checkinKeys.length === 0) {
+    return 0;
+  }
+
+  const filtered = checkinKeys
+    .filter((dateKey) => isDateKeyInRange(dateKey, startKey, endKey))
+    .sort();
+
+  let longest = 0;
+  let current = 0;
+  let previous = null;
+
+  for (const dateKey of filtered) {
+    if (!previous) {
+      current = 1;
+      longest = Math.max(longest, current);
+      previous = dateKey;
+      continue;
+    }
+
+    const expectedNext = addDaysToDateKey(previous, 1);
+    if (dateKey === expectedNext) {
+      current += 1;
+    } else {
+      current = 1;
+    }
+
+    longest = Math.max(longest, current);
+    previous = dateKey;
+  }
+
+  return longest;
+};
+
+const computeCurrentStreak = ({ checkinSet, startKey, endKey, todayKey }) => {
+  if (!startKey || !endKey) {
+    return 0;
+  }
+
+  const cappedToday = todayKey > endKey ? endKey : todayKey;
+  const hasToday = checkinSet.has(cappedToday);
+  const anchor = hasToday ? cappedToday : addDaysToDateKey(cappedToday, -1);
+
+  if (anchor < startKey || anchor > endKey) {
+    return 0;
+  }
+
+  let cursor = anchor;
+  let count = 0;
+  while (cursor >= startKey && checkinSet.has(cursor)) {
+    count += 1;
+    cursor = addDaysToDateKey(cursor, -1);
+  }
+
+  return count;
+};
+
+const computeMissedDays = ({ checkinKeys, startKey, endKey, isActive, todayKey }) => {
+  if (!startKey || !endKey) {
+    return 0;
+  }
+
+  let evaluationEnd = endKey;
+  const yesterdayKey = addDaysToDateKey(todayKey, -1);
+
+  // A day is only counted as missed after it fully passes.
+  if (isActive && endKey >= todayKey) {
+    evaluationEnd = yesterdayKey;
+  }
+
+  if (evaluationEnd < startKey) {
+    return 0;
+  }
+
+  const expectedDays = daysBetweenInclusive(startKey, evaluationEnd);
+  const completedDays = checkinKeys.filter((dateKey) =>
+    isDateKeyInRange(dateKey, startKey, evaluationEnd),
+  ).length;
+
+  return Math.max(0, expectedDays - completedDays);
+};
+
+const resolveStreakStatus = ({
+  isActive,
+  endKey,
+  todayKey,
+  missedDays,
+  allowedMisses,
+  canceledByUser,
+}) => {
+  if (canceledByUser) {
+    return "Failed";
+  }
+
+  if (isActive && endKey >= todayKey) {
+    return "In Progress";
+  }
+
+  return missedDays <= allowedMisses ? "Completed" : "Failed";
+};
+
 const requireUser = () => {
   const user = auth.currentUser;
   if (!user) {
@@ -57,6 +198,7 @@ export const createStreak = async ({ goalTitle, frequency = "daily", startDate, 
     totalDays: 0,
     currentStreak: 0,
     longestStreak: 0,
+    allowedMisses: 2,
     createdAt: serverTimestamp(),
   });
 
@@ -102,7 +244,11 @@ export const checkIn = async ({ streakId, date }) => {
       };
     }
 
-    const currentStreak = (streak.currentStreak || 0) + 1;
+    const previousDateKey = addDaysToDateKey(dateKey, -1);
+    const previousCheckinRef = doc(collection(streakRef, "checkins"), previousDateKey);
+    const previousCheckinSnap = await transaction.get(previousCheckinRef);
+
+    const currentStreak = previousCheckinSnap.exists() ? (streak.currentStreak || 0) + 1 : 1;
     const longestStreak = Math.max(streak.longestStreak || 0, currentStreak);
     const totalDays = (streak.totalDays || 0) + 1;
 
@@ -129,20 +275,68 @@ export const getHistory = async () => {
     query(collection(db, "streaks"), where("userId", "==", user.uid)),
   );
 
-  const history = snapshot.docs.map((docSnap) => {
-    const data = docSnap.data();
-    return {
-      streakId: docSnap.id,
-      goalTitle: data.goalTitle,
-      startDate: data.startDate,
-      endDate: data.endDate,
-      totalDays: data.totalDays || 0,
-      isActive: data.isActive || false,
-      currentStreak: data.currentStreak || 0,
-      longestStreak: data.longestStreak || 0,
-      lastCheckInDate: data.lastCheckInDate || data.lastCheckin || null,
-    };
-  });
+  const todayKey = getDateKey(new Date());
+
+  const history = await Promise.all(
+    snapshot.docs.map(async (docSnap) => {
+      const data = docSnap.data();
+      const startKey = toDateKeyOrNull(data.startDate) || todayKey;
+      const endKey = toDateKeyOrNull(data.endDate) || todayKey;
+      const isActive = data.isActive !== false;
+      const canceledByUser = data.canceledByUser === true;
+      const allowedMisses = Number.isInteger(data.allowedMisses) ? data.allowedMisses : 2;
+
+      const checkinsSnapshot = await getDocs(collection(docSnap.ref, "checkins"));
+      const checkinKeys = checkinsSnapshot.docs
+        .map((checkinDoc) => {
+          const checkinData = checkinDoc.data();
+          return String(checkinData?.date || checkinDoc.id).slice(0, 10);
+        })
+        .filter(Boolean)
+        .sort();
+
+      const checkinSet = new Set(checkinKeys);
+      const totalDays = checkinSet.size;
+      const currentStreak = computeCurrentStreak({
+        checkinSet,
+        startKey,
+        endKey,
+        todayKey,
+      });
+      const longestStreak = computeLongestStreak(checkinKeys, startKey, endKey);
+      const missedDays = computeMissedDays({
+        checkinKeys,
+        startKey,
+        endKey,
+        isActive,
+        todayKey,
+      });
+      const status = resolveStreakStatus({
+        isActive,
+        endKey,
+        todayKey,
+        missedDays,
+        allowedMisses,
+        canceledByUser,
+      });
+
+      return {
+        streakId: docSnap.id,
+        goalTitle: data.goalTitle,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        totalDays,
+        isActive,
+        status,
+        allowedMisses,
+        missedDays,
+        canceledByUser,
+        currentStreak,
+        longestStreak,
+        lastCheckInDate: checkinKeys.length ? checkinKeys[checkinKeys.length - 1] : null,
+      };
+    }),
+  );
 
   return { history };
 };
@@ -196,7 +390,7 @@ export const cancelStreak = async ({ streakId }) => {
   }
 
   const endDate = new Date().toISOString();
-  await updateDoc(streakRef, { isActive: false, endDate });
+  await updateDoc(streakRef, { isActive: false, endDate, canceledByUser: true });
 
   return { success: true, message: "Challenge canceled" };
 };

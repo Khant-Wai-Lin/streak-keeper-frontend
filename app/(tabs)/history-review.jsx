@@ -2,7 +2,9 @@ import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "rea
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Settings, Zap } from "lucide-react-native";
 import { useCallback, useState } from "react";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
+import { auth } from "../../src/config/firebase";
+import { logoutSession } from "../../src/api/auth";
 import { theme } from "../../src/core/theme";
 import { deleteStreakHistory, getHistory, getProfileStats } from "../../src/api/streaks";
 
@@ -15,6 +17,8 @@ export default function HistoryReviewScreen() {
     longestStreak: 0,
   });
   const [errorMessage, setErrorMessage] = useState("");
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleDeleteHistory = useCallback((streak) => {
     if (!streak?.streakId || deletingStreakId) {
@@ -125,6 +129,10 @@ export default function HistoryReviewScreen() {
   };
 
   const getStreakStatus = (streak) => {
+    if (streak?.status) {
+      return streak.status;
+    }
+
     const today = normalizeDateOnly(new Date().toISOString());
     const endDate = normalizeDateOnly(streak?.endDate);
     const lastCheckInDate = normalizeDateOnly(streak?.lastCheckInDate);
@@ -155,12 +163,55 @@ export default function HistoryReviewScreen() {
     return styles.statusFailed;
   };
 
+  const handleLogout = async () => {
+    if (isLoggingOut) {
+      return;
+    }
+
+    try {
+      setIsLoggingOut(true);
+      await logoutSession();
+      setIsAccountMenuOpen(false);
+      router.replace("/(auth)/login");
+    } catch (_error) {
+      Alert.alert("Logout failed", "Please try again.");
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <View style={styles.content}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>History</Text>
-          <Settings size={20} color={theme.colors.mutedText} />
+          <View style={styles.accountMenuWrap}>
+            <TouchableOpacity
+              style={styles.settingsButton}
+              activeOpacity={0.7}
+              onPress={() => setIsAccountMenuOpen((prev) => !prev)}
+            >
+              <Settings size={20} color={theme.colors.mutedText} />
+            </TouchableOpacity>
+
+            {isAccountMenuOpen ? (
+              <View style={styles.accountMenu}>
+                <Text style={styles.accountEmail} numberOfLines={1}>
+                  {auth.currentUser?.email || "No email"}
+                </Text>
+                <TouchableOpacity
+                  style={styles.accountLogoutButton}
+                  activeOpacity={0.85}
+                  onPress={handleLogout}
+                  disabled={isLoggingOut}
+                >
+                  <Text style={styles.accountLogoutText}>
+                    {isLoggingOut ? "Logging out..." : "Logout"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
         </View>
 
         <View style={styles.summaryBlock}>
@@ -185,43 +236,48 @@ export default function HistoryReviewScreen() {
           <Text style={styles.sectionTitle}>YOUR STREAKS</Text>
         </View>
 
-        {errorMessage ? (
-          <Text style={styles.helperText}>{errorMessage}</Text>
-        ) : null}
-        {!isLoading && !errorMessage && streaks.length === 0 ? (
-          <Text style={styles.helperText}>No streaks yet. Start one from Home.</Text>
-        ) : null}
+        <View style={styles.streaksScrollArea}>
+          <ScrollView contentContainerStyle={styles.streaksContent} showsVerticalScrollIndicator={false}>
+            {errorMessage ? (
+              <Text style={styles.helperText}>{errorMessage}</Text>
+            ) : null}
+            {!isLoading && !errorMessage && streaks.length === 0 ? (
+              <Text style={styles.helperText}>No streaks yet. Start one from Home.</Text>
+            ) : null}
 
-        {sortedStreaks.map((streak) => {
-          const status = getStreakStatus(streak);
+            {sortedStreaks.map((streak) => {
+              const status = getStreakStatus(streak);
 
-          return (
-          <View key={streak.streakId} style={styles.streakCard}>
-            <View style={styles.streakInfo}>
-              <Text style={styles.streakTitle}>{streak.goalTitle}</Text>
-              <Text style={styles.streakProgress}>
-                {streak.totalDays || 0} days completed
-              </Text>
-              <View style={[styles.statusBadge, getStatusStyle(status)]}>
-                <Text style={styles.statusText}>{status}</Text>
-              </View>
-            </View>
-            <View style={styles.streakActions}>
-              <Text style={styles.streakCount}>{streak.totalDays || 0}</Text>
-              <TouchableOpacity
-                style={styles.deleteButton}
-                activeOpacity={0.85}
-                onPress={() => handleDeleteHistory(streak)}
-                disabled={Boolean(deletingStreakId)}
-              >
-                <Text style={styles.deleteButtonText}>
-                  {deletingStreakId === streak.streakId ? "Deleting..." : "Delete"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        );})}
-      </ScrollView>
+              return (
+                <View key={streak.streakId} style={styles.streakCard}>
+                  <View style={styles.streakInfo}>
+                    <Text style={styles.streakTitle}>{streak.goalTitle}</Text>
+                    <Text style={styles.streakProgress}>
+                      {streak.totalDays || 0} days completed
+                    </Text>
+                    <View style={[styles.statusBadge, getStatusStyle(status)]}>
+                      <Text style={styles.statusText}>{status}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.streakActions}>
+                    <Text style={styles.streakCount}>{streak.totalDays || 0}</Text>
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      activeOpacity={0.85}
+                      onPress={() => handleDeleteHistory(streak)}
+                      disabled={Boolean(deletingStreakId)}
+                    >
+                      <Text style={styles.deleteButtonText}>
+                        {deletingStreakId === streak.streakId ? "Deleting..." : "Delete"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -232,8 +288,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
+    flex: 1,
     paddingHorizontal: 24,
-    paddingBottom: 40,
     paddingTop: 16,
   },
   headerRow: {
@@ -246,6 +302,41 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: 28,
     fontWeight: "600",
+  },
+  accountMenuWrap: {
+    alignItems: "flex-end",
+    position: "relative",
+  },
+  settingsButton: {
+    padding: 2,
+  },
+  accountMenu: {
+    backgroundColor: theme.colors.surfaceAlt,
+    borderRadius: 12,
+    marginTop: 8,
+    minWidth: 200,
+    padding: 12,
+    position: "absolute",
+    right: 0,
+    top: 22,
+    zIndex: 20,
+  },
+  accountEmail: {
+    color: theme.colors.text,
+    fontSize: 13,
+    marginBottom: 10,
+  },
+  accountLogoutButton: {
+    backgroundColor: "#2a1a1a",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  accountLogoutText: {
+    color: "#ff9c9c",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
   },
   summaryBlock: {
     alignItems: "center",
@@ -305,6 +396,12 @@ const styles = StyleSheet.create({
   sectionHeader: {
     marginTop: 28,
     marginBottom: 12,
+  },
+  streaksScrollArea: {
+    flex: 1,
+  },
+  streaksContent: {
+    paddingBottom: 40,
   },
   sectionTitle: {
     color: theme.colors.mutedText,

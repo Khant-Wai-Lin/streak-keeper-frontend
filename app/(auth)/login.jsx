@@ -1,9 +1,9 @@
-import { ShieldCheck } from "lucide-react-native";
 import { router } from "expo-router";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { useState } from "react";
 import {
   Alert,
+  Image,
   StyleSheet,
   Text,
   TextInput,
@@ -42,7 +42,7 @@ export default function LoginScreen() {
 
     try {
       await signInWithEmailAndPassword(auth, email.trim(), password);
-      router.push("/(tabs)/home");
+      router.replace("/(tabs)/home");
     } catch (error) {
       Alert.alert("Login failed", getLoginErrorMessage(error?.code));
     }
@@ -53,7 +53,11 @@ export default function LoginScreen() {
       <View style={styles.content}>
         <View style={styles.brand}>
           <View style={styles.logoWrap}>
-            <ShieldCheck size={40} color={theme.colors.primary} />
+            <Image
+              source={require("../../assets/shield-check.png")}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
           <Text style={styles.brandText}>StreakKeeper</Text>
         </View>
@@ -124,6 +128,10 @@ const styles = StyleSheet.create({
     height: 64,
     justifyContent: "center",
     width: 64,
+  },
+  logoImage: {
+    height: 40,
+    width: 40,
   },
   brandText: {
     color: theme.colors.text,

@@ -1,15 +1,17 @@
 import { Lock, Trophy, User } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { router, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth } from "../../src/config/firebase";
 import { theme } from "../../src/core/theme";
+import { logoutSession } from "../../src/api/auth";
 import { getProfileStats } from "../../src/api/streaks";
 
 export default function ProfileScreen() {
   const [currentStreakDays, setCurrentStreakDays] = useState(0);
   const [totalDays, setTotalDays] = useState(0);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const tiers = [
     { days: 7, label: "Bronze" },
     { days: 14, label: "Silver" },
@@ -66,6 +68,37 @@ export default function ProfileScreen() {
       };
     }, []),
   );
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+
+    try {
+      setIsLoggingOut(true);
+      await logoutSession();
+      router.replace("/(auth)/login");
+    } catch (_error) {
+      Alert.alert("Logout failed", "Please try again.");
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
+  const handleConfirmLogout = () => {
+    if (isLoggingOut) return;
+
+    Alert.alert(
+      "Logout",
+      "Are you sure you want to logout?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Logout",
+          style: "destructive",
+          onPress: handleLogout,
+        },
+      ],
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -137,6 +170,17 @@ export default function ProfileScreen() {
             );
           })}
         </View>
+
+        <TouchableOpacity
+          style={[styles.logoutButtonBottom, isLoggingOut && styles.logoutButtonDisabled]}
+          onPress={handleConfirmLogout}
+          activeOpacity={0.85}
+          disabled={isLoggingOut}
+        >
+          <Text style={styles.logoutButtonBottomText}>
+            {isLoggingOut ? "Logging out..." : "Logout"}
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -162,6 +206,22 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: 28,
     fontWeight: "600",
+  },
+  logoutButtonDisabled: {
+    opacity: 0.6,
+  },
+  logoutButtonBottom: {
+    alignItems: "center",
+    backgroundColor: "#5a1f1f",
+    borderRadius: 14,
+    marginTop: 10,
+    paddingVertical: 14,
+    width: "100%",
+  },
+  logoutButtonBottomText: {
+    color: "#ffd5d5",
+    fontSize: 15,
+    fontWeight: "700",
   },
   profileCard: {
     alignItems: "center",

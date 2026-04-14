@@ -1,6 +1,6 @@
 import { ArrowRight, Calendar, Check, Flag, Play, Settings } from "lucide-react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth } from "../../src/config/firebase";
 import { theme } from "../../src/core/theme";
+import { logoutSession } from "../../src/api/auth";
 import { cancelStreak, checkIn, createStreak, getHistory } from "../../src/api/streaks";
 // import {
 //   cancelScheduledNotifications,
@@ -35,6 +36,8 @@ export default function HomeScreen() {
   const [isCheckingInId, setIsCheckingInId] = useState("");
   const [isCancelingId, setIsCancelingId] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
@@ -52,7 +55,7 @@ export default function HomeScreen() {
       setIsLoading(true);
       const result = await getHistory();
       const history = result?.history || [];
-      const activeOnly = history.filter((streak) => streak.isActive);
+      const activeOnly = history.filter((streak) => streak.status === "In Progress");
       const completedMap = activeOnly.reduce((acc, streak) => {
         acc[streak.streakId] = streak.lastCheckInDate === todayKey;
         return acc;
@@ -217,21 +220,7 @@ export default function HomeScreen() {
       }));
       setCompletedTodayById((prev) => ({ ...prev, [streakId]: true }));
 
-      const targetStreak = activeStreaks.find((streak) => streak.streakId === streakId);
-      const todayDateOnly = normalizeDateOnly(new Date().toISOString());
-      const endDateOnly = normalizeDateOnly(targetStreak?.endDate);
-      const shouldCompleteChallenge = Boolean(
-        todayDateOnly && endDateOnly && todayDateOnly >= endDateOnly,
-      );
-
-      if (shouldCompleteChallenge) {
-        await cancelStreak({ streakId });
-        Alert.alert(
-          "Challenge Completed",
-          `You finished \"${targetStreak?.goalTitle || "your challenge"}\"!`,
-        );
-        await loadActiveStreaks();
-      }
+      await loadActiveStreaks();
     } catch (error) {
       Alert.alert("Check-in failed", error?.message || "Please try again.");
     } finally {
@@ -276,127 +265,174 @@ export default function HomeScreen() {
     );
   };
 
+  const handleLogout = async () => {
+    if (isLoggingOut) {
+      return;
+    }
+
+    try {
+      setIsLoggingOut(true);
+      await logoutSession();
+      setIsAccountMenuOpen(false);
+      router.replace("/(auth)/login");
+    } catch (_error) {
+      Alert.alert("Logout failed", "Please try again.");
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.headerRow}>
-          <Text style={styles.headerDate}>{todayLabel}</Text>
-          <TouchableOpacity style={styles.settingsRow} activeOpacity={0.7}>
-            <Settings size={18} color={theme.colors.mutedText} />
-          </TouchableOpacity>
-        </View>
+      <View style={styles.content}>
+        <View style={styles.topContent}>
+          <View style={styles.headerRow}>
+            <Text style={styles.headerDate}>{todayLabel}</Text>
+            <View style={styles.accountMenuWrap}>
+              <TouchableOpacity
+                style={styles.settingsRow}
+                activeOpacity={0.7}
+                onPress={() => setIsAccountMenuOpen((prev) => !prev)}
+              >
+                <Settings size={18} color={theme.colors.mutedText} />
+              </TouchableOpacity>
 
-        <Text style={styles.title}>Add New Challenge</Text>
+              {isAccountMenuOpen ? (
+                <View style={styles.accountMenu}>
+                  <Text style={styles.accountEmail} numberOfLines={1}>
+                    {auth.currentUser?.email || "No email"}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.accountLogoutButton}
+                    activeOpacity={0.85}
+                    onPress={handleLogout}
+                    disabled={isLoggingOut}
+                  >
+                    <Text style={styles.accountLogoutText}>
+                      {isLoggingOut ? "Logging out..." : "Logout"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+            </View>
+          </View>
 
-        <View style={styles.inputWrap}>
-          <TextInput
-            placeholder="e.g., Study 30 minutes daily"
-            placeholderTextColor={theme.colors.mutedText}
-            style={styles.input}
-            value={goalTitle}
-            onChangeText={setGoalTitle}
-          />
-          <TouchableOpacity
-            style={styles.iconButton}
-            activeOpacity={0.7}
-            onPress={() => openPicker("start")}
-          >
-            <Calendar size={20} color={theme.colors.mutedText} />
-          </TouchableOpacity>
-        </View>
+          <Text style={styles.title}>Add New Challenge</Text>
 
-        <View style={styles.dateRange}>
-          <Text style={styles.dateLabel}>Date range</Text>
-          <View style={styles.dateRow}>
+          <View style={styles.inputWrap}>
+            <TextInput
+              placeholder="e.g., Study 30 minutes daily"
+              placeholderTextColor={theme.colors.mutedText}
+              style={styles.input}
+              value={goalTitle}
+              onChangeText={setGoalTitle}
+            />
             <TouchableOpacity
-              style={styles.dateChip}
-              activeOpacity={0.8}
+              style={styles.iconButton}
+              activeOpacity={0.7}
               onPress={() => openPicker("start")}
             >
-              <Play size={14} color={theme.colors.mutedText} />
-              <Text style={styles.dateChipText}>{formatDate(startDate)}</Text>
-            </TouchableOpacity>
-            <ArrowRight size={16} color={theme.colors.mutedText} />
-            <TouchableOpacity
-              style={styles.dateChip}
-              activeOpacity={0.8}
-              onPress={() => openPicker("end")}
-            >
-              <Flag size={14} color={theme.colors.mutedText} />
-              <Text style={styles.dateChipText}>{formatDate(endDate)}</Text>
+              <Calendar size={20} color={theme.colors.mutedText} />
             </TouchableOpacity>
           </View>
-        </View>
 
-        <TouchableOpacity
-          style={styles.primaryButton}
-          activeOpacity={0.85}
-          onPress={handleStartStreak}
-          disabled={isSaving}
-        >
-          <Text style={styles.primaryButtonText}>
-            {isSaving ? "Adding..." : "Add Challenge"}
-          </Text>
-        </TouchableOpacity>
+          <View style={styles.dateRange}>
+            <Text style={styles.dateLabel}>Date range</Text>
+            <View style={styles.dateRow}>
+              <TouchableOpacity
+                style={styles.dateChip}
+                activeOpacity={0.8}
+                onPress={() => openPicker("start")}
+              >
+                <Play size={14} color={theme.colors.mutedText} />
+                <Text style={styles.dateChipText}>{formatDate(startDate)}</Text>
+              </TouchableOpacity>
+              <ArrowRight size={16} color={theme.colors.mutedText} />
+              <TouchableOpacity
+                style={styles.dateChip}
+                activeOpacity={0.8}
+                onPress={() => openPicker("end")}
+              >
+                <Flag size={14} color={theme.colors.mutedText} />
+                <Text style={styles.dateChipText}>{formatDate(endDate)}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.primaryButton}
+            activeOpacity={0.85}
+            onPress={handleStartStreak}
+            disabled={isSaving}
+          >
+            <Text style={styles.primaryButtonText}>
+              {isSaving ? "Adding..." : "Add Challenge"}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.sectionHeadRow}>
           <Text style={styles.sectionLabel}>ACTIVE CHALLENGES</Text>
         </View>
 
-        {loadError ? (
-          <Text style={styles.helperText}>{loadError}</Text>
-        ) : null}
-        {isLoading ? (
-          <Text style={styles.helperText}>Loading challenges...</Text>
-        ) : null}
-        {!isLoading && !loadError && activeStreaks.length === 0 ? (
-          <Text style={styles.helperText}>No active challenge yet. Add one above.</Text>
-        ) : null}
+        <View style={styles.challengesScrollArea}>
+          <ScrollView contentContainerStyle={styles.challengesContent} showsVerticalScrollIndicator={false}>
+            {loadError ? (
+              <Text style={styles.helperText}>{loadError}</Text>
+            ) : null}
+            {isLoading ? (
+              <Text style={styles.helperText}>Loading challenges...</Text>
+            ) : null}
+            {!isLoading && !loadError && activeStreaks.length === 0 ? (
+              <Text style={styles.helperText}>No active challenge yet. Add one above.</Text>
+            ) : null}
 
-        {activeStreaks.map((streak) => {
-          const isCompletedToday = Boolean(completedTodayById[streak.streakId]);
-          const isCheckingIn = isCheckingInId === streak.streakId;
-          const isCanceling = isCancelingId === streak.streakId;
+            {activeStreaks.map((streak) => {
+              const isCompletedToday = Boolean(completedTodayById[streak.streakId]);
+              const isCheckingIn = isCheckingInId === streak.streakId;
+              const isCanceling = isCancelingId === streak.streakId;
 
-          return (
-            <View key={streak.streakId} style={styles.challengeCard}>
-              <Text style={styles.currentTaskTitle}>{streak.goalTitle}</Text>
-              <Text style={styles.challengeDates}>
-                {formatRangeDate(streak.startDate)} - {formatRangeDate(streak.endDate)}
-              </Text>
-
-              <View style={styles.challengeStatsRow}>
-                <Text style={styles.challengeStatText}>Current: {streak.currentStreak || 0}d</Text>
-                <Text style={styles.challengeStatText}>Longest: {streak.longestStreak || 0}d</Text>
-              </View>
-
-              <View style={styles.challengeActionsRow}>
-                <TouchableOpacity
-                  style={[styles.actionButton, isCompletedToday && styles.actionButtonDone]}
-                  activeOpacity={0.85}
-                  onPress={() => handleCheckIn(streak.streakId)}
-                  disabled={isCheckingIn || isCompletedToday || Boolean(isCheckingInId)}
-                >
-                  <Text style={styles.actionButtonText}>
-                    {isCheckingIn ? "Completing..." : isCompletedToday ? "Done Today" : "Complete Today"}
+              return (
+                <View key={streak.streakId} style={styles.challengeCard}>
+                  <Text style={styles.currentTaskTitle}>{streak.goalTitle}</Text>
+                  <Text style={styles.challengeDates}>
+                    {formatRangeDate(streak.startDate)} - {formatRangeDate(streak.endDate)}
                   </Text>
-                </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.secondaryButton}
-                  activeOpacity={0.85}
-                  onPress={() => handleCancelStreak(streak)}
-                  disabled={isCanceling || Boolean(isCancelingId)}
-                >
-                  <Text style={styles.secondaryButtonText}>
-                    {isCanceling ? "Canceling..." : "Cancel"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          );
-        })}
-      </ScrollView>
+                  <View style={styles.challengeStatsRow}>
+                    <Text style={styles.challengeStatText}>Current: {streak.currentStreak || 0}d</Text>
+                    <Text style={styles.challengeStatText}>Longest: {streak.longestStreak || 0}d</Text>
+                  </View>
+
+                  <View style={styles.challengeActionsRow}>
+                    <TouchableOpacity
+                      style={[styles.actionButton, isCompletedToday && styles.actionButtonDone]}
+                      activeOpacity={0.85}
+                      onPress={() => handleCheckIn(streak.streakId)}
+                      disabled={isCheckingIn || isCompletedToday || Boolean(isCheckingInId)}
+                    >
+                      <Text style={styles.actionButtonText}>
+                        {isCheckingIn ? "Completing..." : isCompletedToday ? "Done Today" : "Complete Today"}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.secondaryButton}
+                      activeOpacity={0.85}
+                      onPress={() => handleCancelStreak(streak)}
+                      disabled={isCanceling || Boolean(isCancelingId)}
+                    >
+                      <Text style={styles.secondaryButtonText}>
+                        {isCanceling ? "Canceling..." : "Cancel"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </View>
 
       {pickerTarget && (
         <DateTimePicker
@@ -417,11 +453,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    alignItems: "stretch",
-    gap: 22,
+    flex: 1,
     paddingHorizontal: 28,
     paddingTop: 44,
-    paddingBottom: 40,
+  },
+  topContent: {
+    alignItems: "stretch",
+    gap: 22,
   },
   headerRow: {
     alignItems: "center",
@@ -440,6 +478,38 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     gap: 6,
+  },
+  accountMenuWrap: {
+    alignItems: "flex-end",
+    position: "relative",
+  },
+  accountMenu: {
+    backgroundColor: theme.colors.surfaceAlt,
+    borderRadius: 12,
+    marginTop: 8,
+    minWidth: 200,
+    padding: 12,
+    position: "absolute",
+    right: 0,
+    top: 20,
+    zIndex: 20,
+  },
+  accountEmail: {
+    color: theme.colors.text,
+    fontSize: 13,
+    marginBottom: 10,
+  },
+  accountLogoutButton: {
+    backgroundColor: "#2a1a1a",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  accountLogoutText: {
+    color: "#ff9c9c",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
   },
   settingsText: {
     color: theme.colors.mutedText,
@@ -520,6 +590,14 @@ const styles = StyleSheet.create({
   },
   sectionHeadRow: {
     marginTop: 8,
+  },
+  challengesScrollArea: {
+    flex: 1,
+    marginTop: 10,
+  },
+  challengesContent: {
+    gap: 14,
+    paddingBottom: 40,
   },
   challengeCard: {
     backgroundColor: theme.colors.surfaceAlt,

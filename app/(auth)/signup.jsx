@@ -1,9 +1,8 @@
-import { ShieldCheck } from "lucide-react-native";
 import { router } from "expo-router";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { useState } from "react";
 import { Alert } from "react-native";
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth } from "../../src/config/firebase";
 import { theme } from "../../src/core/theme";
@@ -41,7 +40,7 @@ export default function SignUpScreen() {
 
     try {
       await createUserWithEmailAndPassword(auth, email.trim(), password);
-      router.push("/(tabs)/home");
+      router.replace("/(tabs)/home");
     } catch (error) {
       Alert.alert("Sign up failed", getSignUpErrorMessage(error?.code));
     }
@@ -52,7 +51,11 @@ export default function SignUpScreen() {
       <View style={styles.content}>
         <View style={styles.brand}>
           <View style={styles.logoWrap}>
-            <ShieldCheck size={40} color={theme.colors.primary} />
+            <Image
+              source={require("../../assets/shield-check.png")}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
           <Text style={styles.brandText}>Create Account</Text>
         </View>
@@ -128,6 +131,10 @@ const styles = StyleSheet.create({
     height: 64,
     justifyContent: "center",
     width: 64,
+  },
+  logoImage: {
+    height: 40,
+    width: 40,
   },
   brandText: {
     color: theme.colors.text,
