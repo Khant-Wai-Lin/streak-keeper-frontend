@@ -18,6 +18,19 @@ const getDateKey = (date) => {
   return date.toISOString().slice(0, 10);
 };
 
+const parseIsoDate = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toISOString();
+};
+
 const authMiddleware = async (req, res, next) => {
   const authHeader = req.headers.authorization || "";
   const match = authHeader.match(/^Bearer (.+)$/);
@@ -60,29 +73,34 @@ app.post("/api/v1/auth/logout", authMiddleware, async (req, res) => {
 });
 
 app.post("/api/v1/streaks", authMiddleware, async (req, res) => {
-  const {goalTitle, frequency} = req.body || {};
+  const {goalTitle, frequency, startDate, endDate} = req.body || {};
   if (!goalTitle || !frequency) {
     return res.status(400).json({
       error: "goalTitle and frequency are required",
     });
   }
 
-  const startDate = new Date().toISOString();
+  const resolvedStartDate = parseIsoDate(startDate) || new Date().toISOString();
+  const resolvedEndDate = parseIsoDate(endDate);
   try {
     const docRef = await admin.firestore().collection("streaks").add({
       userId: req.user.uid,
       goalTitle,
       frequency,
       isActive: true,
-      startDate,
-      endDate: null,
+      startDate: resolvedStartDate,
+      endDate: resolvedEndDate,
       totalDays: 0,
       currentStreak: 0,
       longestStreak: 0,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    return res.json({streakId: docRef.id, isActive: true, startDate});
+    return res.json({
+      streakId: docRef.id,
+      isActive: true,
+      startDate: resolvedStartDate,
+    });
   } catch (error) {
     logger.error("Create streak failed", {error});
     return res.status(500).json({error: "Failed to create streak"});
@@ -142,6 +160,7 @@ app.post("/api/v1/streaks/checkin", authMiddleware, async (req, res) => {
             longestStreak,
             totalDays,
             lastCheckin: dateKey,
+            lastCheckInDate: dateKey,
           });
 
           return {currentStreak, longestStreak};
@@ -178,6 +197,10 @@ app.get("/api/v1/streaks/history", authMiddleware, async (req, res) => {
         startDate: data.startDate,
         endDate: data.endDate,
         totalDays: data.totalDays || 0,
+        isActive: data.isActive || false,
+        currentStreak: data.currentStreak || 0,
+        longestStreak: data.longestStreak || 0,
+        lastCheckInDate: data.lastCheckInDate || data.lastCheckin || null,
       };
     });
 

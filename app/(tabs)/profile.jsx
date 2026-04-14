@@ -1,14 +1,15 @@
 import { Lock, Trophy, User } from "lucide-react-native";
-import { useState } from "react";
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { auth } from "../../src/config/firebase";
 import { theme } from "../../src/core/theme";
+import { getProfileStats } from "../../src/api/streaks";
 
 export default function ProfileScreen() {
-  const [isEditing, setIsEditing] = useState(false);
-  const [name, setName] = useState("Khant W.");
-  const currentStreakDays = 16;
-  const totalDays = 124;
+  const [currentStreakDays, setCurrentStreakDays] = useState(0);
+  const [totalDays, setTotalDays] = useState(0);
   const tiers = [
     { days: 7, label: "Bronze" },
     { days: 14, label: "Silver" },
@@ -24,9 +25,47 @@ export default function ProfileScreen() {
     Diamond: "#7fb3ff",
   };
 
-  const handleEditToggle = () => {
-    setIsEditing((prev) => !prev);
-  };
+  const user = auth.currentUser;
+  const displayName = useMemo(() => {
+    if (user?.displayName) {
+      return user.displayName;
+    }
+
+    if (user?.email) {
+      return user.email.split("@")[0];
+    }
+
+    return "User";
+  }, [user?.displayName, user?.email]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+
+      const loadStats = async () => {
+        try {
+          const result = await getProfileStats();
+          const nextTotalDays = result?.totalUniqueCheckinDays || 0;
+          const nextBestStreak = result?.longestStreak || 0;
+
+          if (isMounted) {
+            setTotalDays(nextTotalDays);
+            setCurrentStreakDays(nextBestStreak);
+          }
+        } catch (_error) {
+          if (isMounted) {
+            setTotalDays(0);
+            setCurrentStreakDays(0);
+          }
+        }
+      };
+
+      loadStats();
+      return () => {
+        isMounted = false;
+      };
+    }, []),
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -40,22 +79,9 @@ export default function ProfileScreen() {
             <User size={28} color={theme.colors.primary} />
           </View>
           <View style={styles.profileInfo}>
-            {isEditing ? (
-              <TextInput
-                value={name}
-                onChangeText={setName}
-                style={styles.nameInput}
-                placeholder="Your name"
-                placeholderTextColor={theme.colors.mutedText}
-              />
-            ) : (
-              <Text style={styles.profileName}>{name}</Text>
-            )}
-            <Text style={styles.profileEmail}>khant@example.com</Text>
+            <Text style={styles.profileName}>{displayName}</Text>
+            <Text style={styles.profileEmail}>{user?.email || "No email"}</Text>
           </View>
-          <TouchableOpacity style={styles.editButton} activeOpacity={0.7} onPress={handleEditToggle}>
-            <Text style={styles.editText}>{isEditing ? "Save" : "Edit"}</Text>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.statsRow}>
@@ -161,30 +187,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
   },
-  nameInput: {
-    borderColor: theme.colors.inputBorder,
-    borderRadius: 10,
-    borderWidth: 1,
-    color: theme.colors.text,
-    fontSize: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
   profileEmail: {
     color: theme.colors.mutedText,
     fontSize: 13,
     marginTop: 4,
-  },
-  editButton: {
-    backgroundColor: "#0f2617",
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  editText: {
-    color: theme.colors.primary,
-    fontSize: 13,
-    fontWeight: "600",
   },
   statsRow: {
     flexDirection: "row",
@@ -259,5 +265,4 @@ const styles = StyleSheet.create({
   badgeLabelLocked: {
     color: theme.colors.mutedText,
   },
-  
 });

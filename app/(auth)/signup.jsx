@@ -43,7 +43,6 @@ export default function SignUpScreen() {
       await createUserWithEmailAndPassword(auth, email.trim(), password);
       router.push("/(tabs)/home");
     } catch (error) {
-      console.log("SignUp error:", error?.code, error?.message);
       Alert.alert("Sign up failed", getSignUpErrorMessage(error?.code));
     }
   };

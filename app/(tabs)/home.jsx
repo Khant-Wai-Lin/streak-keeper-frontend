@@ -1,9 +1,10 @@
 import { ArrowRight, Calendar, Check, Flag, Play, Settings } from "lucide-react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { router } from "expo-router";
-import { useMemo, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -11,21 +12,31 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { auth } from "../../src/config/firebase";
 import { theme } from "../../src/core/theme";
-import {
-  cancelScheduledNotifications,
-  ensureNotificationPermission,
-  loadNotifications,
-  scheduleStreakNotifications,
-} from "../../src/utils/notifications";
+import { cancelStreak, checkIn, createStreak, getHistory } from "../../src/api/streaks";
+// import {
+//   cancelScheduledNotifications,
+//   ensureNotificationPermission,
+//   loadNotifications,
+//   scheduleStreakNotifications,
+// } from "../../src/utils/notifications";
 
 export default function HomeScreen() {
-  const [hasStarted, setHasStarted] = useState(false);
-  const [isCompletedToday, setIsCompletedToday] = useState(false);
+  const [goalTitle, setGoalTitle] = useState("");
+  const [activeStreaks, setActiveStreaks] = useState([]);
+  const [completedTodayById, setCompletedTodayById] = useState({});
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
   const [pickerTarget, setPickerTarget] = useState(null);
   const [pickerDate, setPickerDate] = useState(new Date());
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isCheckingInId, setIsCheckingInId] = useState("");
+  const [isCancelingId, setIsCancelingId] = useState("");
+  const [loadError, setLoadError] = useState("");
+
+  const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   const todayLabel = useMemo(() => {
     const now = new Date();
@@ -35,6 +46,33 @@ export default function HomeScreen() {
       day: "numeric",
     });
   }, []);
+
+  const loadActiveStreaks = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const result = await getHistory();
+      const history = result?.history || [];
+      const activeOnly = history.filter((streak) => streak.isActive);
+      const completedMap = activeOnly.reduce((acc, streak) => {
+        acc[streak.streakId] = streak.lastCheckInDate === todayKey;
+        return acc;
+      }, {});
+
+      setActiveStreaks(activeOnly);
+      setCompletedTodayById(completedMap);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(error?.message || "Unable to load challenges.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [todayKey]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadActiveStreaks();
+    }, [loadActiveStreaks]),
+  );
 
   const openPicker = (target) => {
     const seedDate = target === "end" ? endDate : startDate;
@@ -71,8 +109,47 @@ export default function HomeScreen() {
     return date.toLocaleDateString();
   };
 
+  const resetChallengeForm = () => {
+    setGoalTitle("");
+    setStartDate(null);
+    setEndDate(null);
+  };
+
+  const formatRangeDate = (value) => {
+    if (!value) {
+      return "-";
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return "-";
+    }
+
+    return parsed.toLocaleDateString();
+  };
+
+  const normalizeDateOnly = (value) => {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+
+    parsed.setHours(0, 0, 0, 0);
+    return parsed;
+  };
 
   const handleStartStreak = async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      Alert.alert("Not logged in", "Please log in again before starting a streak.");
+      return;
+    }
+
+    if (!goalTitle.trim()) {
+      Alert.alert("Add a goal", "Please enter a goal title.");
+      return;
+    }
+
     if (!startDate || !endDate) {
       Alert.alert("Pick dates", "Please choose a start and end date.");
       return;
@@ -83,33 +160,125 @@ export default function HomeScreen() {
       return;
     }
 
-    // const notifications = await loadNotifications();
-    // if (!notifications) {
-    //   Alert.alert(
-    //     "Use a dev build",
-    //     "Notifications are not supported in Expo Go. Open this app in a development build."
-    //   );
-    //   return;
-    // }
+    try {
+      setIsSaving(true);
+      const result = await createStreak({
+        goalTitle: goalTitle.trim(),
+        frequency: "daily",
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      });
 
-    // const permissionGranted = await ensureNotificationPermission(notifications);
-    // if (!permissionGranted) {
-    //   Alert.alert(
-    //     "Notifications disabled",
-    //     "Enable notifications to receive daily reminders."
-    //   );
-    //   return;
-    // }
+      setActiveStreaks((prev) => [{
+        streakId: result.streakId,
+        goalTitle: goalTitle.trim(),
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        totalDays: 0,
+        currentStreak: 0,
+        longestStreak: 0,
+        isActive: true,
+      }, ...prev]);
+      setCompletedTodayById((prev) => ({ ...prev, [result.streakId]: false }));
+      resetChallengeForm();
 
-    // await cancelScheduledNotifications(notifications);
-    // await scheduleStreakNotifications(notifications, startDate, endDate);
+      // Notification setup disabled for now.
+    } catch (error) {
+      Alert.alert("Could not start", error?.message || "Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-    setHasStarted(true);
+  const handleCheckIn = async (streakId) => {
+    if (!streakId || completedTodayById[streakId] || isCheckingInId) {
+      return;
+    }
+
+    try {
+      setIsCheckingInId(streakId);
+      const result = await checkIn({
+        streakId,
+        date: new Date().toISOString(),
+      });
+
+      setActiveStreaks((prev) => prev.map((streak) => {
+        if (streak.streakId !== streakId) {
+          return streak;
+        }
+
+        return {
+          ...streak,
+          currentStreak: result.currentStreak ?? streak.currentStreak,
+          longestStreak: result.longestStreak ?? streak.longestStreak,
+          totalDays: (streak.totalDays || 0) + 1,
+          lastCheckInDate: todayKey,
+        };
+      }));
+      setCompletedTodayById((prev) => ({ ...prev, [streakId]: true }));
+
+      const targetStreak = activeStreaks.find((streak) => streak.streakId === streakId);
+      const todayDateOnly = normalizeDateOnly(new Date().toISOString());
+      const endDateOnly = normalizeDateOnly(targetStreak?.endDate);
+      const shouldCompleteChallenge = Boolean(
+        todayDateOnly && endDateOnly && todayDateOnly >= endDateOnly,
+      );
+
+      if (shouldCompleteChallenge) {
+        await cancelStreak({ streakId });
+        Alert.alert(
+          "Challenge Completed",
+          `You finished \"${targetStreak?.goalTitle || "your challenge"}\"!`,
+        );
+        await loadActiveStreaks();
+      }
+    } catch (error) {
+      Alert.alert("Check-in failed", error?.message || "Please try again.");
+    } finally {
+      setIsCheckingInId("");
+    }
+  };
+
+  const handleCancelStreak = (streak) => {
+    if (!streak?.streakId || isCancelingId) {
+      return;
+    }
+
+    Alert.alert(
+      "Cancel streak",
+      "Are you sure you want to cancel this streak?",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes, cancel",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setIsCancelingId(streak.streakId);
+              await cancelStreak({ streakId: streak.streakId });
+
+              // Notification cancel disabled for now.
+
+              setActiveStreaks((prev) => prev.filter((item) => item.streakId !== streak.streakId));
+              setCompletedTodayById((prev) => {
+                const next = { ...prev };
+                delete next[streak.streakId];
+                return next;
+              });
+            } catch (error) {
+              Alert.alert("Cancel failed", error?.message || "Please try again.");
+            } finally {
+              setIsCancelingId("");
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
           <Text style={styles.headerDate}>{todayLabel}</Text>
           <TouchableOpacity style={styles.settingsRow} activeOpacity={0.7}>
@@ -117,89 +286,117 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {!hasStarted ? (
-          <>
-            <Text style={styles.title}>Define Your{"\n"}Goal</Text>
+        <Text style={styles.title}>Add New Challenge</Text>
 
-            <View style={styles.inputWrap}>
-              <TextInput
-                placeholder="e.g., Study 30 minutes daily"
-                placeholderTextColor={theme.colors.mutedText}
-                style={styles.input}
-              />
-              <TouchableOpacity
-                style={styles.iconButton}
-                activeOpacity={0.7}
-                onPress={() => openPicker("start")}
-              >
-                <Calendar size={20} color={theme.colors.mutedText} />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.inputWrap}>
+          <TextInput
+            placeholder="e.g., Study 30 minutes daily"
+            placeholderTextColor={theme.colors.mutedText}
+            style={styles.input}
+            value={goalTitle}
+            onChangeText={setGoalTitle}
+          />
+          <TouchableOpacity
+            style={styles.iconButton}
+            activeOpacity={0.7}
+            onPress={() => openPicker("start")}
+          >
+            <Calendar size={20} color={theme.colors.mutedText} />
+          </TouchableOpacity>
+        </View>
 
-            <View style={styles.dateRange}>
-              <Text style={styles.dateLabel}>Date range</Text>
-              <View style={styles.dateRow}>
-                <TouchableOpacity
-                  style={styles.dateChip}
-                  activeOpacity={0.8}
-                  onPress={() => openPicker("start")}
-                >
-                  <Play size={14} color={theme.colors.mutedText} />
-                  <Text style={styles.dateChipText}>{formatDate(startDate)}</Text>
-                </TouchableOpacity>
-                <ArrowRight size={16} color={theme.colors.mutedText} />
-                <TouchableOpacity
-                  style={styles.dateChip}
-                  activeOpacity={0.8}
-                  onPress={() => openPicker("end")}
-                >
-                  <Flag size={14} color={theme.colors.mutedText} />
-                  <Text style={styles.dateChipText}>{formatDate(endDate)}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <Text style={styles.helperText}>
-              What habit would you like to build?{"\n"}
-              Your streak starts as soon as you define it.
-            </Text>
-
+        <View style={styles.dateRange}>
+          <Text style={styles.dateLabel}>Date range</Text>
+          <View style={styles.dateRow}>
             <TouchableOpacity
-              style={styles.primaryButton}
-              activeOpacity={0.85}
-              onPress={handleStartStreak}
+              style={styles.dateChip}
+              activeOpacity={0.8}
+              onPress={() => openPicker("start")}
             >
-              <Text style={styles.primaryButtonText}>Start My Streak</Text>
+              <Play size={14} color={theme.colors.mutedText} />
+              <Text style={styles.dateChipText}>{formatDate(startDate)}</Text>
             </TouchableOpacity>
-          </>
-        ) : (
-          <>
-            {!isCompletedToday ? (
-              <TouchableOpacity
-                style={styles.streakCircle}
-                activeOpacity={0.85}
-                onPress={() => setIsCompletedToday(true)}
-              >
-                <Text style={styles.streakPrompt}>Did you do{"\n"}it today?</Text>
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.completedCircle}>
-                <View style={styles.checkBadge}>
-                  <Check size={28} color={theme.colors.primary} />
-                </View>
-                <Text style={styles.completedText}>Completed!</Text>
+            <ArrowRight size={16} color={theme.colors.mutedText} />
+            <TouchableOpacity
+              style={styles.dateChip}
+              activeOpacity={0.8}
+              onPress={() => openPicker("end")}
+            >
+              <Flag size={14} color={theme.colors.mutedText} />
+              <Text style={styles.dateChipText}>{formatDate(endDate)}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.primaryButton}
+          activeOpacity={0.85}
+          onPress={handleStartStreak}
+          disabled={isSaving}
+        >
+          <Text style={styles.primaryButtonText}>
+            {isSaving ? "Adding..." : "Add Challenge"}
+          </Text>
+        </TouchableOpacity>
+
+        <View style={styles.sectionHeadRow}>
+          <Text style={styles.sectionLabel}>ACTIVE CHALLENGES</Text>
+        </View>
+
+        {loadError ? (
+          <Text style={styles.helperText}>{loadError}</Text>
+        ) : null}
+        {isLoading ? (
+          <Text style={styles.helperText}>Loading challenges...</Text>
+        ) : null}
+        {!isLoading && !loadError && activeStreaks.length === 0 ? (
+          <Text style={styles.helperText}>No active challenge yet. Add one above.</Text>
+        ) : null}
+
+        {activeStreaks.map((streak) => {
+          const isCompletedToday = Boolean(completedTodayById[streak.streakId]);
+          const isCheckingIn = isCheckingInId === streak.streakId;
+          const isCanceling = isCancelingId === streak.streakId;
+
+          return (
+            <View key={streak.streakId} style={styles.challengeCard}>
+              <Text style={styles.currentTaskTitle}>{streak.goalTitle}</Text>
+              <Text style={styles.challengeDates}>
+                {formatRangeDate(streak.startDate)} - {formatRangeDate(streak.endDate)}
+              </Text>
+
+              <View style={styles.challengeStatsRow}>
+                <Text style={styles.challengeStatText}>Current: {streak.currentStreak || 0}d</Text>
+                <Text style={styles.challengeStatText}>Longest: {streak.longestStreak || 0}d</Text>
               </View>
-            )}
 
-            <View style={styles.streakCard}>
-              <Text style={styles.sectionLabel}>CURRENT STREAK</Text>
-              <Text style={styles.streakValue}>16 Days</Text>
+              <View style={styles.challengeActionsRow}>
+                <TouchableOpacity
+                  style={[styles.actionButton, isCompletedToday && styles.actionButtonDone]}
+                  activeOpacity={0.85}
+                  onPress={() => handleCheckIn(streak.streakId)}
+                  disabled={isCheckingIn || isCompletedToday || Boolean(isCheckingInId)}
+                >
+                  <Text style={styles.actionButtonText}>
+                    {isCheckingIn ? "Completing..." : isCompletedToday ? "Done Today" : "Complete Today"}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  activeOpacity={0.85}
+                  onPress={() => handleCancelStreak(streak)}
+                  disabled={isCanceling || Boolean(isCancelingId)}
+                >
+                  <Text style={styles.secondaryButtonText}>
+                    {isCanceling ? "Canceling..." : "Cancel"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-
-            <Text style={styles.helperTextAlt}>See you tomorrow!</Text>
-          </>
-        )}
-      </View>
+          );
+        })}
+      </ScrollView>
 
       {pickerTarget && (
         <DateTimePicker
@@ -220,8 +417,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    alignItems: "center",
-    flex: 1,
+    alignItems: "stretch",
     gap: 22,
     paddingHorizontal: 28,
     paddingTop: 44,
@@ -257,10 +453,10 @@ const styles = StyleSheet.create({
   },
   title: {
     color: theme.colors.text,
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "600",
     letterSpacing: 0.4,
-    textAlign: "center",
+    textAlign: "left",
   },
   inputWrap: {
     alignItems: "center",
@@ -314,7 +510,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: theme.colors.primary,
     borderRadius: 26,
-    marginTop: "auto",
     paddingVertical: 16,
     width: "100%",
   },
@@ -323,62 +518,70 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
   },
-  streakCircle: {
-    alignItems: "center",
-    backgroundColor: theme.colors.surfaceAlt,
-    borderRadius: 170,
-    height: 280,
-    justifyContent: "center",
-    width: 280,
+  sectionHeadRow: {
+    marginTop: 8,
   },
-  streakPrompt: {
+  challengeCard: {
+    backgroundColor: theme.colors.surfaceAlt,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  currentTaskTitle: {
     color: theme.colors.text,
-    fontSize: 26,
+    fontSize: 16,
     fontWeight: "600",
-    textAlign: "center",
+  },
+  challengeDates: {
+    color: theme.colors.mutedText,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  challengeStatsRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 10,
+  },
+  challengeStatText: {
+    color: theme.colors.text,
+    fontSize: 13,
   },
   sectionLabel: {
     color: theme.colors.mutedText,
     fontSize: 12,
     letterSpacing: 1,
   },
-  streakValue: {
-    color: theme.colors.text,
-    fontSize: 24,
-    fontWeight: "600",
-  },
-  completedCircle: {
+  challengeActionsRow: {
     alignItems: "center",
-    backgroundColor: theme.colors.primary,
-    borderRadius: 170,
-    height: 280,
-    justifyContent: "center",
-    width: 280,
-  },
-  checkBadge: {
-    alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderRadius: 26,
-    height: 52,
-    justifyContent: "center",
-    width: 52,
-  },
-  completedText: {
-    color: theme.colors.onPrimary,
-    fontSize: 24,
-    fontWeight: "600",
+    flexDirection: "row",
+    gap: 10,
     marginTop: 12,
   },
-  streakCard: {
+  actionButton: {
     alignItems: "center",
-    backgroundColor: theme.colors.surfaceAlt,
-    borderRadius: 20,
-    gap: 8,
-    paddingHorizontal: 28,
-    paddingVertical: 18,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 18,
+    flex: 1,
+    paddingVertical: 10,
   },
-  helperTextAlt: {
-    color: theme.colors.mutedText,
-    fontSize: 16,
+  actionButtonDone: {
+    backgroundColor: "#1f3b2a",
+  },
+  actionButtonText: {
+    color: theme.colors.onPrimary,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  secondaryButton: {
+    alignItems: "center",
+    backgroundColor: "#0f2617",
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  secondaryButtonText: {
+    color: theme.colors.primary,
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

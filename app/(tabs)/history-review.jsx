@@ -1,32 +1,159 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Settings, Zap } from "lucide-react-native";
+import { useCallback, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import { theme } from "../../src/core/theme";
+import { deleteStreakHistory, getHistory, getProfileStats } from "../../src/api/streaks";
 
 export default function HistoryReviewScreen() {
-  const streaks = [
-    {
-      id: "1",
-      title: "Study 30 minutes daily",
-      daysCompleted: 16,
-      goalDays: 30,
-    },
-    {
-      id: "2",
-      title: "Read 10 pages",
-      daysCompleted: 9,
-      goalDays: 21,
-    },
-    {
-      id: "3",
-      title: "Workout",
-      daysCompleted: 42,
-      goalDays: 60,
-    },
-  ];
+  const [streaks, setStreaks] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [deletingStreakId, setDeletingStreakId] = useState("");
+  const [profileStats, setProfileStats] = useState({
+    totalUniqueCheckinDays: 0,
+    longestStreak: 0,
+  });
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const longestStreak = 42;
-  const totalDays = streaks.reduce((sum, streak) => sum + streak.daysCompleted, 0);
+  const handleDeleteHistory = useCallback((streak) => {
+    if (!streak?.streakId || deletingStreakId) {
+      return;
+    }
+
+    Alert.alert(
+      "Delete history",
+      `Delete \"${streak.goalTitle || "this streak"}\" from history?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setDeletingStreakId(streak.streakId);
+              await deleteStreakHistory({ streakId: streak.streakId });
+              setStreaks((prev) => prev.filter((item) => item.streakId !== streak.streakId));
+            } catch (error) {
+              Alert.alert("Delete failed", error?.message || "Please try again.");
+            } finally {
+              setDeletingStreakId("");
+            }
+          },
+        },
+      ],
+    );
+  }, [deletingStreakId]);
+
+  useFocusEffect(useCallback(() => {
+    let isMounted = true;
+
+    const loadHistory = async () => {
+      if (isMounted) {
+        setIsLoading(true);
+      }
+
+      try {
+        const [historyResult, statsResult] = await Promise.all([
+          getHistory(),
+          getProfileStats(),
+        ]);
+        if (isMounted) {
+          setStreaks(historyResult.history || []);
+          setProfileStats({
+            totalUniqueCheckinDays: statsResult?.totalUniqueCheckinDays || 0,
+            longestStreak: statsResult?.longestStreak || 0,
+          });
+          setErrorMessage("");
+        }
+      } catch (error) {
+        if (isMounted) {
+          setProfileStats({ totalUniqueCheckinDays: 0, longestStreak: 0 });
+          setErrorMessage(error?.message || "Unable to load history.");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadHistory();
+    return () => {
+      isMounted = false;
+    };
+  }, []));
+
+  const totalDays = profileStats.totalUniqueCheckinDays;
+  const longestStreak = profileStats.longestStreak;
+
+  const toTimestamp = (value) => {
+    if (!value) {
+      return 0;
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return 0;
+    }
+
+    return date.getTime();
+  };
+
+  const sortedStreaks = [...streaks].sort((a, b) => {
+    const aTime = Math.max(
+      toTimestamp(a.lastCheckInDate),
+      toTimestamp(a.endDate),
+      toTimestamp(a.startDate),
+    );
+    const bTime = Math.max(
+      toTimestamp(b.lastCheckInDate),
+      toTimestamp(b.endDate),
+      toTimestamp(b.startDate),
+    );
+
+    return bTime - aTime;
+  });
+
+  const normalizeDateOnly = (value) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
+
+  const getStreakStatus = (streak) => {
+    const today = normalizeDateOnly(new Date().toISOString());
+    const endDate = normalizeDateOnly(streak?.endDate);
+    const lastCheckInDate = normalizeDateOnly(streak?.lastCheckInDate);
+
+    if (streak?.isActive) {
+      if (endDate && today && today > endDate) {
+        return "Failed";
+      }
+      return "In Progress";
+    }
+
+    if (endDate && lastCheckInDate && lastCheckInDate >= endDate) {
+      return "Completed";
+    }
+
+    return "Failed";
+  };
+
+  const getStatusStyle = (status) => {
+    if (status === "Completed") {
+      return styles.statusCompleted;
+    }
+
+    if (status === "In Progress") {
+      return styles.statusProgress;
+    }
+
+    return styles.statusFailed;
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -37,9 +164,9 @@ export default function HistoryReviewScreen() {
         </View>
 
         <View style={styles.summaryBlock}>
-          <Text style={styles.summaryLabel}>TOTAL DAYS</Text>
-          <Text style={styles.summaryValue}>{totalDays}</Text>
-          <Text style={styles.summaryCaption}>Days of consistency</Text>
+          <Text style={styles.summaryLabel}>LONGEST CONSISTENCY</Text>
+          <Text style={styles.summaryValue}>{isLoading ? "-" : longestStreak}</Text>
+          <Text style={styles.summaryCaption}>Longest day streak</Text>
         </View>
 
         <View style={styles.card}>
@@ -47,9 +174,9 @@ export default function HistoryReviewScreen() {
             <Zap size={20} color={theme.colors.primary} />
           </View>
           <View style={styles.cardBody}>
-            <Text style={styles.cardLabel}>LONGEST STREAK</Text>
+            <Text style={styles.cardLabel}>UNIQUE CHECK-IN DAYS</Text>
             <Text style={styles.cardValue}>
-              {longestStreak} <Text style={styles.cardValueMuted}>Days</Text>
+              {isLoading ? "-" : totalDays} <Text style={styles.cardValueMuted}>Days</Text>
             </Text>
           </View>
         </View>
@@ -58,17 +185,42 @@ export default function HistoryReviewScreen() {
           <Text style={styles.sectionTitle}>YOUR STREAKS</Text>
         </View>
 
-        {streaks.map((streak) => (
-          <View key={streak.id} style={styles.streakCard}>
+        {errorMessage ? (
+          <Text style={styles.helperText}>{errorMessage}</Text>
+        ) : null}
+        {!isLoading && !errorMessage && streaks.length === 0 ? (
+          <Text style={styles.helperText}>No streaks yet. Start one from Home.</Text>
+        ) : null}
+
+        {sortedStreaks.map((streak) => {
+          const status = getStreakStatus(streak);
+
+          return (
+          <View key={streak.streakId} style={styles.streakCard}>
             <View style={styles.streakInfo}>
-              <Text style={styles.streakTitle}>{streak.title}</Text>
+              <Text style={styles.streakTitle}>{streak.goalTitle}</Text>
               <Text style={styles.streakProgress}>
-                {streak.daysCompleted} / {streak.goalDays} days completed
+                {streak.totalDays || 0} days completed
               </Text>
+              <View style={[styles.statusBadge, getStatusStyle(status)]}>
+                <Text style={styles.statusText}>{status}</Text>
+              </View>
             </View>
-            <Text style={styles.streakCount}>{streak.daysCompleted}</Text>
+            <View style={styles.streakActions}>
+              <Text style={styles.streakCount}>{streak.totalDays || 0}</Text>
+              <TouchableOpacity
+                style={styles.deleteButton}
+                activeOpacity={0.85}
+                onPress={() => handleDeleteHistory(streak)}
+                disabled={Boolean(deletingStreakId)}
+              >
+                <Text style={styles.deleteButtonText}>
+                  {deletingStreakId === streak.streakId ? "Deleting..." : "Delete"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        ))}
+        );})}
       </ScrollView>
     </SafeAreaView>
   );
@@ -183,9 +335,51 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 6,
   },
+  statusBadge: {
+    alignSelf: "flex-start",
+    borderRadius: 12,
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  statusText: {
+    color: "#dfe7ef",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  statusCompleted: {
+    backgroundColor: "#12311f",
+  },
+  statusProgress: {
+    backgroundColor: "#1f2a3b",
+  },
+  statusFailed: {
+    backgroundColor: "#3a1a1a",
+  },
   streakCount: {
     color: theme.colors.primary,
     fontSize: 22,
     fontWeight: "700",
+  },
+  streakActions: {
+    alignItems: "flex-end",
+    gap: 8,
+  },
+  deleteButton: {
+    backgroundColor: "#2a1a1a",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  deleteButtonText: {
+    color: "#ff9c9c",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  helperText: {
+    color: theme.colors.mutedText,
+    fontSize: 14,
+    marginTop: 12,
+    textAlign: "center",
   },
 });
