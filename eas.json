@@ -6,13 +6,43 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCYmJdQcSvgWBMr1aXyMaEYcNzIeJEuzk8",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "streak-keeper-d50f0.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "streak-keeper-d50f0",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "streak-keeper-d50f0.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "932655790375",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:932655790375:web:b00e730ebdba574b591102",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-8Z6SS0XTMK"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCYmJdQcSvgWBMr1aXyMaEYcNzIeJEuzk8",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "streak-keeper-d50f0.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "streak-keeper-d50f0",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "streak-keeper-d50f0.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "932655790375",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:932655790375:web:b00e730ebdba574b591102",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-8Z6SS0XTMK"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCYmJdQcSvgWBMr1aXyMaEYcNzIeJEuzk8",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "streak-keeper-d50f0.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "streak-keeper-d50f0",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "streak-keeper-d50f0.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "932655790375",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:932655790375:web:b00e730ebdba574b591102",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-8Z6SS0XTMK"
+      }
     }
   },
   "submit": {
