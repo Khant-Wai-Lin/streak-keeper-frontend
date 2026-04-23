@@ -1,0 +1,52 @@
+[
+  {
+    "id": "e77296af-9354-4dc0-9683-134c52261ec2",
+    "status": "FINISHED",
+    "platform": "ANDROID",
+    "artifacts": {
+      "buildUrl": "https://expo.dev/artifacts/eas/uzDzRhEwxawhnx4WerFPyw.aab",
+      "applicationArchiveUrl": "https://expo.dev/artifacts/eas/uzDzRhEwxawhnx4WerFPyw.aab"
+    },
+    "fingerprint": {
+      "id": "019d8d83-6a8e-7c3e-98fc-96a6e2578968",
+      "hash": "cc0d0b7b1b25751aba2f140057eb5a21b7f8181f"
+    },
+    "initiatingActor": {
+      "id": "ceaf8a1a-611c-41d5-89f9-c438ea61fbb8",
+      "displayName": "kellydraken"
+    },
+    "logFiles": [
+      "https://job-logs.eascdn.net/production/e77296af-9354-4dc0-9683-134c52261ec2/1776226410230-ba43800b-6500-4e6a-89be-faf5a24da1a3.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260415%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260415T042326Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=02ee52eae3e303c3d32b0366f5b9e4ce0eb77df79090a2d37453dde840c36530e3a69f8a4335dd162090baf6a58911e38b04383015d95011bf32e811795f64390a4595c51f9a24a303e6d98b10d1d56868423c76188471a5244f909c6d11fb8767b6691c0da045545a055333ddd4f4ca12f1d54c06683ce57a351e0aa65203971f2a42e6ca210956a3c5507b75937891632fd8da9700a893f810c329f6e4e827b6927431699a225b7fc81c920c66cd56ee62710d406b7825d834773dcb38bf2f85436d21c216a5e6a4ad00e0ded86bc4c0c99765957b9b4668864687468f5c86ff918e9226d7f709279aad790aba897a204cff36b046a82fd0f240610eeb9a9f",
+      "https://job-logs.eascdn.net/production/e77296af-9354-4dc0-9683-134c52261ec2/1776226417183-f73b0843-e6de-45a6-b29c-9a708734aaed.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260415%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260415T042326Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=75db1d8eb523504fa708116c974256b15c1cba173dddc81be024b3f146809ec31490debd525cc430fddec12cc4823d34e74ebcaeb074ec4d4fcf34e4d28fe5c6cf02b5c10a950cb1d6991f266de4f641084789d4dfcfd54ba90e357c0976dcfeeb87190d1e6408a66c9d284737f3699af09cda71dac2df82c16008ff22f6e06b4bb89ba3a0ccd9b336dc8b1640e86cb84b7054666039ca15df8d3395ded3e00958e1bd2bde0174f340b3fe6da1adfe82734ca7b990d309a83826c57591220eeb8765d6814f00fa103a0755bf46df0ff9f34cd90e67ee77197f51d2a75ffda3c7b6fe3b0f6ae5d9d65ee72097aa9a1306e4e87b1217eab222ec9c371292cd7339",
+      "https://job-logs.eascdn.net/production/e77296af-9354-4dc0-9683-134c52261ec2/1776226417434-914e8e5d-67e8-4e2f-bd1b-4f376e6a742a.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260415%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260415T042326Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=cb108a3c546a845d92b12249d880d78585c8fb11e970282a486577f3b64a776eea0b6ffa8636a0e1278a80048ca934909de853b3d5d94f7ac215b354fb85cdb861a5e7ea753222058ba492d3a282482cfa976e7b74a3355c891f8dce8f604024410ca32327a36b9d9b7a02572a5be4e7e76812e77e4a22639b654a3653b35d3dfd6cad6cd1f4dfb68701d818cfc82a39555587958b021420ce4edbc1d42384b607c1cfa61e25bf1df687605a8ebf62fdb4f1e793bdfb97667a58430c3bbf18ab24094f393fe01be17682429be5cfc2983da6e56f782dc728f43c014d7a5567a9c12dee130b2192cc3bf8f48a3cdae7007b54a9509bd047cffceeca8678e402f3",
+      "https://job-logs.eascdn.net/production/e77296af-9354-4dc0-9683-134c52261ec2/1776226417662-722f0393-73aa-4b7a-af0c-cebb2d3ddf61.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260415%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260415T042326Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=9a6792c44dbea765c4a6311a1a0db6a0020f0200538f47cc2612bc376d25b4e5f12237d6e3d8de3654d06fbeb1a803185fc4103e467334fc2bcd337e158ddd3eec57541cba669c6df5cb394cfaf7734e5099be1aeab8a43f0b218bb021860b9de79eff50b06c7b46ad7cd82de351760bd1123eb8a4f0a49e8afe48f48043b2e903af41a11a3674b3627c7ed9710e59f5095420c2c8b7078d73c6e4fe5050a4938738ba9bc1356da19b609b99f58bda328f8d5a9d237e840b3b821ee3e428c317ca8ea7472452cce63a62da5fb9e52007e67e0b6dd813aebd032b77bb6d15e8e891bad13e27ced0107bfec7f11f8fb4296c849d0e03ff162978d82323e189b150"
+    ],
+    "project": {
+      "id": "4037c3dd-fff9-4bdb-959a-2f6a71177374",
+      "name": "streak-keeper",
+      "slug": "streak-keeper",
+      "ownerAccount": {
+        "id": "9bb7a885-39e8-4683-8df2-92a74cff85a6",
+        "name": "kellydraken"
+      }
+    },
+    "distribution": "STORE",
+    "buildProfile": "production",
+    "sdkVersion": "54.0.0",
+    "appVersion": "1.0.0",
+    "appBuildVersion": "3",
+    "gitCommitHash": "4f8482936db72de82406eff38190d4e390100ddd",
+    "gitCommitMessage": "polishing the app",
+    "priority": "NORMAL",
+    "createdAt": "2026-04-15T04:13:29.998Z",
+    "updatedAt": "2026-04-15T04:22:22.835Z",
+    "completedAt": "2026-04-15T04:22:17.116Z",
+    "expirationDate": "2026-05-15T04:13:30.019Z",
+    "isForIosSimulator": false,
+    "metrics": {
+      "buildWaitTime": 88,
+      "buildQueueTime": 45543,
+      "buildDuration": 477353
+    }
+  }
+]

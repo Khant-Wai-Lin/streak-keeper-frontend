@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { Platform } from "react-native";
 
 export const buildDailyTriggers = (start, end, hour = 8, minute = 0) => {
   const triggers = [];
@@ -21,6 +22,10 @@ export const buildDailyTriggers = (start, end, hour = 8, minute = 0) => {
 };
 
 export const loadNotifications = async () => {
+  if (Platform.OS === "web") {
+    return null;
+  }
+
   if (Constants.appOwnership === "expo") {
     return null;
   }
@@ -38,6 +43,10 @@ export const loadNotifications = async () => {
 };
 
 export const ensureNotificationPermission = async (notifications) => {
+  if (!notifications) {
+    return false;
+  }
+
   const current = await notifications.getPermissionsAsync();
   if (current.status === "granted") {
     return true;

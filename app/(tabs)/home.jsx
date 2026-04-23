@@ -4,6 +4,7 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -24,6 +25,7 @@ import { cancelStreak, checkIn, createStreak, getHistory } from "../../src/api/s
 // } from "../../src/utils/notifications";
 
 export default function HomeScreen() {
+  const isWeb = Platform.OS === "web";
   const [goalTitle, setGoalTitle] = useState("");
   const [activeStreaks, setActiveStreaks] = useState([]);
   const [completedTodayById, setCompletedTodayById] = useState({});
@@ -31,6 +33,7 @@ export default function HomeScreen() {
   const [endDate, setEndDate] = useState(null);
   const [pickerTarget, setPickerTarget] = useState(null);
   const [pickerDate, setPickerDate] = useState(new Date());
+  const [webPickerValue, setWebPickerValue] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isCheckingInId, setIsCheckingInId] = useState("");
@@ -77,7 +80,30 @@ export default function HomeScreen() {
     }, [loadActiveStreaks]),
   );
 
+  const confirmAction = (title, message, onConfirm) => {
+    if (Platform.OS === "web") {
+      const confirmed = globalThis?.confirm?.(`${title}\n\n${message}`);
+      if (confirmed) {
+        onConfirm();
+      }
+      return;
+    }
+
+    Alert.alert(title, message, [
+      { text: "No", style: "cancel" },
+      { text: "Yes, cancel", style: "destructive", onPress: onConfirm },
+    ]);
+  };
+
   const openPicker = (target) => {
+    if (isWeb) {
+      const seedDate = target === "end" ? endDate : startDate;
+      const nextValue = seedDate ? seedDate.toISOString().slice(0, 10) : "";
+      setWebPickerValue(nextValue);
+      setPickerTarget(target);
+      return;
+    }
+
     const seedDate = target === "end" ? endDate : startDate;
     setPickerDate(seedDate || new Date());
     setPickerTarget(target);
@@ -139,6 +165,47 @@ export default function HomeScreen() {
 
     parsed.setHours(0, 0, 0, 0);
     return parsed;
+  };
+
+  const parseWebDate = (value) => {
+    if (!value) {
+      return null;
+    }
+
+    const parts = value.split("-").map((part) => Number(part));
+    if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
+      return null;
+    }
+
+    const [year, month, day] = parts;
+    const parsed = new Date(year, month - 1, day);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+
+    parsed.setHours(0, 0, 0, 0);
+    return parsed;
+  };
+
+  const applyWebDate = () => {
+    const nextDate = parseWebDate(webPickerValue);
+    if (!nextDate) {
+      setPickerTarget(null);
+      return;
+    }
+
+    if (pickerTarget === "start") {
+      setStartDate(nextDate);
+      if (endDate && nextDate > endDate) {
+        setEndDate(null);
+      }
+    }
+
+    if (pickerTarget === "end") {
+      setEndDate(nextDate);
+    }
+
+    setPickerTarget(null);
   };
 
   const handleStartStreak = async () => {
@@ -233,36 +300,25 @@ export default function HomeScreen() {
       return;
     }
 
-    Alert.alert(
-      "Cancel streak",
-      "Are you sure you want to cancel this streak?",
-      [
-        { text: "No", style: "cancel" },
-        {
-          text: "Yes, cancel",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setIsCancelingId(streak.streakId);
-              await cancelStreak({ streakId: streak.streakId });
+    confirmAction("Cancel streak", "Are you sure you want to cancel this streak?", async () => {
+      try {
+        setIsCancelingId(streak.streakId);
+        await cancelStreak({ streakId: streak.streakId });
 
-              // Notification cancel disabled for now.
+        // Notification cancel disabled for now.
 
-              setActiveStreaks((prev) => prev.filter((item) => item.streakId !== streak.streakId));
-              setCompletedTodayById((prev) => {
-                const next = { ...prev };
-                delete next[streak.streakId];
-                return next;
-              });
-            } catch (error) {
-              Alert.alert("Cancel failed", error?.message || "Please try again.");
-            } finally {
-              setIsCancelingId("");
-            }
-          },
-        },
-      ]
-    );
+        setActiveStreaks((prev) => prev.filter((item) => item.streakId !== streak.streakId));
+        setCompletedTodayById((prev) => {
+          const next = { ...prev };
+          delete next[streak.streakId];
+          return next;
+        });
+      } catch (error) {
+        Alert.alert("Cancel failed", error?.message || "Please try again.");
+      } finally {
+        setIsCancelingId("");
+      }
+    });
   };
 
   const handleLogout = async () => {
@@ -435,13 +491,58 @@ export default function HomeScreen() {
       </View>
 
       {pickerTarget && (
-        <DateTimePicker
-          value={pickerDate}
-          mode="date"
-          display="default"
-          minimumDate={pickerTarget === "end" && startDate ? startDate : undefined}
-          onChange={handleDateChange}
-        />
+        isWeb ? (
+          <View style={styles.webPickerOverlay}>
+            <View style={styles.webPickerCard}>
+              <Text style={styles.webPickerTitle}>Select date</Text>
+              <View style={styles.webDateInputWrap}>
+                <input
+                  type="date"
+                  value={webPickerValue}
+                  min={
+                    pickerTarget === "end" && startDate
+                      ? startDate.toISOString().slice(0, 10)
+                      : undefined
+                  }
+                  onChange={(event) => setWebPickerValue(event.target.value)}
+                  style={{
+                    backgroundColor: theme.colors.inputBg,
+                    borderColor: theme.colors.inputBorder,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    color: theme.colors.text,
+                    fontSize: 14,
+                    padding: 10,
+                    width: "100%",
+                  }}
+                />
+              </View>
+              <View style={styles.webPickerActions}>
+                <TouchableOpacity
+                  style={styles.webPickerButton}
+                  onPress={() => setPickerTarget(null)}
+                >
+                  <Text style={styles.webPickerButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.webPickerButton, styles.webPickerButtonPrimary]}
+                  onPress={applyWebDate}
+                >
+                  <Text style={styles.webPickerButtonTextPrimary}>Apply</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.webPickerHint}>Pick a date from the calendar.</Text>
+            </View>
+          </View>
+        ) : (
+          <DateTimePicker
+            value={pickerDate}
+            mode="date"
+            display="default"
+            minimumDate={pickerTarget === "end" && startDate ? startDate : undefined}
+            onChange={handleDateChange}
+          />
+        )
       )}
     </SafeAreaView>
   );
@@ -520,6 +621,71 @@ const styles = StyleSheet.create({
     height: 32,
     justifyContent: "center",
     width: 32,
+  },
+  webPickerOverlay: {
+    backgroundColor: "rgba(5, 8, 12, 0.6)",
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0,
+    justifyContent: "center",
+    padding: 24,
+    zIndex: 30,
+  },
+  webPickerCard: {
+    backgroundColor: theme.colors.surfaceAlt,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: theme.colors.inputBorder,
+    padding: 18,
+    gap: 12,
+  },
+  webPickerTitle: {
+    color: theme.colors.text,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  webPickerInput: {
+    backgroundColor: theme.colors.inputBg,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.inputBorder,
+    color: theme.colors.text,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  webDateInputWrap: {
+    width: "100%",
+  },
+  webPickerActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+  },
+  webPickerButton: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.inputBorder,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: theme.colors.surface,
+  },
+  webPickerButtonPrimary: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  webPickerButtonText: {
+    color: theme.colors.text,
+    fontWeight: "600",
+  },
+  webPickerButtonTextPrimary: {
+    color: theme.colors.onPrimary,
+    fontWeight: "700",
+  },
+  webPickerHint: {
+    color: theme.colors.mutedText,
+    fontSize: 12,
   },
   title: {
     color: theme.colors.text,

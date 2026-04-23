@@ -1,4 +1,4 @@
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Settings, Zap } from "lucide-react-native";
 import { useCallback, useState } from "react";
@@ -20,34 +20,41 @@ export default function HistoryReviewScreen() {
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+  const confirmAction = (title, message, onConfirm) => {
+    if (Platform.OS === "web") {
+      const confirmed = globalThis?.confirm?.(`${title}\n\n${message}`);
+      if (confirmed) {
+        onConfirm();
+      }
+      return;
+    }
+
+    Alert.alert(title, message, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Confirm", style: "destructive", onPress: onConfirm },
+    ]);
+  };
+
   const handleDeleteHistory = useCallback((streak) => {
     if (!streak?.streakId || deletingStreakId) {
       return;
     }
 
-    Alert.alert(
-      "Delete history",
-      `Delete \"${streak.goalTitle || "this streak"}\" from history?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setDeletingStreakId(streak.streakId);
-              await deleteStreakHistory({ streakId: streak.streakId });
-              setStreaks((prev) => prev.filter((item) => item.streakId !== streak.streakId));
-            } catch (error) {
-              Alert.alert("Delete failed", error?.message || "Please try again.");
-            } finally {
-              setDeletingStreakId("");
-            }
-          },
-        },
-      ],
-    );
-  }, [deletingStreakId]);
+    const title = "Delete history";
+    const message = `Delete "${streak.goalTitle || "this streak"}" from history?`;
+
+    confirmAction(title, message, async () => {
+      try {
+        setDeletingStreakId(streak.streakId);
+        await deleteStreakHistory({ streakId: streak.streakId });
+        setStreaks((prev) => prev.filter((item) => item.streakId !== streak.streakId));
+      } catch (error) {
+        Alert.alert("Delete failed", error?.message || "Please try again.");
+      } finally {
+        setDeletingStreakId("");
+      }
+    });
+  }, [confirmAction, deletingStreakId]);
 
   useFocusEffect(useCallback(() => {
     let isMounted = true;

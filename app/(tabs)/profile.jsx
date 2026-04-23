@@ -1,6 +1,6 @@
 import { Lock, Trophy, User } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth } from "../../src/config/firebase";
@@ -86,18 +86,22 @@ export default function ProfileScreen() {
   const handleConfirmLogout = () => {
     if (isLoggingOut) return;
 
-    Alert.alert(
-      "Logout",
-      "Are you sure you want to logout?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Logout",
-          style: "destructive",
-          onPress: handleLogout,
-        },
-      ],
-    );
+    if (Platform.OS === "web") {
+      const confirmed = globalThis?.confirm?.("Logout\n\nAre you sure you want to logout?");
+      if (confirmed) {
+        handleLogout();
+      }
+      return;
+    }
+
+    Alert.alert("Logout", "Are you sure you want to logout?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: handleLogout,
+      },
+    ]);
   };
 
   return (
